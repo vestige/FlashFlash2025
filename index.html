@@ -1,143 +1,182 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>予選総合成績</title>
-  <style>
-    body { font-family: sans-serif; }
-    .tab {
-        overflow: hidden;
-        border: 1px solid #ccc;
-        background-color: #f1f1f1;
-        margin-bottom: 10px;
-    }
-    .tab button {
-        background-color: inherit;
-        float: left;
-        border: none;
-        outline: none;
-        cursor: pointer;
-        padding: 14px 16px;
-        transition: 0.3s;
-    }
-    .tab button:hover {
-        background-color: #ddd;
-    }
-    .tab button.active {
-        background-color: #ccc;
-    }
-    .tabcontent {
-        display: none;
-        padding: 6px 12px;
-        border: 1px solid #ccc;
-        border-top: none;
-    }
-    .tabcontent table {
-        border-collapse: collapse;
-        width: 100%;
-    }
-    .tabcontent th, .tabcontent td {
-        border: 1px solid #ddd;
-        padding: 8px;
-        text-align: left;
-    }
-    .tabcontent th {
-        background-color: #f2f2f2;
-    }
-    @media screen and (max-width: 600px) {
-      .tab button {
-        width: 100%;
-        float: none;
-        text-align: left;
-      }
-      .tabcontent td, .tabcontent th {
-        font-size: 12px;
-        padding: 4px;
-      }
-    }
-  </style>
-</head>
-<body>
-
-  <h1>予選総合成績</h1>
-
-  <div class="tab" id="tab-buttons">
-    <!-- Tab buttons will be inserted here -->
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Flash Flash 2025</title>
+<style>
+:root{--bg:#fafafa;--fg:#111;--muted:#666;--card:#fff;--accent:#2563eb;}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Hiragino Kaku Gothic ProN','Noto Sans JP',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--fg)}
+.header{position:sticky;top:0;z-index:10;background:linear-gradient(180deg,#fff,rgba(255,255,255,0.85));backdrop-filter:saturate(180%) blur(8px);border-bottom:1px solid #eee}
+.wrap{max-width:1100px;margin:0 auto;padding:16px}
+.h1{font-size:22px;font-weight:700;margin:0 0 8px}
+.controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:10px 0 0}
+select,input{padding:8px 10px;border:1px solid #ddd;border-radius:10px;background:#fff}
+.source-note{font-size:12px;color:var(--muted)}
+.category{margin:20px 0;padding:14px;background:var(--card);border:1px solid #eee;border-radius:16px;box-shadow:0 2px 10px rgba(0,0,0,.03)}
+.category h2{margin:0 0 10px;font-size:18px}
+.table-wrap{overflow:auto;border:1px solid #eee;border-radius:12px}
+table{width:100%;border-collapse:separate;border-spacing:0;min-width:680px}
+thead th{position:sticky;top:0;background:#f7f7f7;color:#222;font-weight:700;border-bottom:1px solid #e5e5e5}
+th,td{padding:10px 12px;text-align:left;white-space:nowrap;border-bottom:1px solid #f0f0f0}
+tbody tr:nth-child(odd){background:#fcfcfc}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;background:#eef2ff;color:#1e40af;font-weight:600;font-size:12px;border:1px solid #e5e7eb}
+footer{color:var(--muted);font-size:12px;margin:40px 0 20px}
+</style>
+<header class="header">
+  <div class="wrap">
+    <div class="h1">Flash Flash 2025</div>
+    <div class="controls">
+      <label>データソース:
+        <select id="source"></select>
+      </label>
+      <label>カテゴリ:
+        <select id="cat"><option>すべて</option></select>
+      </label>
+      <input id="q" placeholder="名前などで絞り込み…" />
+    </div>
+    <div class="source-note" id="source-note"></div>
   </div>
+</header>
+<main class="wrap">
+  <div id="root"></div>
+  <footer>ローカルの <code>seisei.json</code> と GitHubの <code>data.json</code> を切り替えて表示します。</footer>
+</main>
+<script>
+const SOURCES = {
+  "FINAL": { 
+    url: "final.json",
+    pref: ["順位","予選順位","名前","セッション","サドンデス１","サドンデス２","合計P","予選総合P"]
+  },
+  "予選": { 
+    url: "data.json",
+    pref: ["順位","名前","総合P","第1戦P","第2戦P","第3戦P"]
+  }
+};
 
-  <div id="tab-contents">
-    <!-- Tab contents will be inserted here -->
-  </div>
+let CATS = [];
+let CURRENT_SOURCE = null;
 
-  <script>
-    function openCategory(evt, categoryId) {
-      var i, tabcontent, tablinks;
-      tabcontent = document.getElementsByClassName("tabcontent");
-      for (i = 0; i < tabcontent.length; i++) {
-        tabcontent[i].style.display = "none";
-      }
-      tablinks = document.getElementsByClassName("tablinks");
-      for (i = 0; i < tablinks.length; i++) {
-        tablinks[i].className = tablinks[i].className.replace(" active", "");
-      }
-      document.getElementById(categoryId).style.display = "block";
-      evt.currentTarget.className += " active";
+async function fetchCategories(url) {
+  const res = await fetch(url, { cache: "no-store" });
+  if(!res.ok) throw new Error(`データ取得に失敗: ${url} (${res.status})`);
+  const data = await res.json();
+  if(!data || !Array.isArray(data.categories)) {
+    throw new Error("不正なデータ形式（categories配列がありません）");
+  }
+  return data.categories;
+}
+
+function orderColumns(rows, pref) {
+  const present = new Set();
+  rows.forEach(r => Object.keys(r).forEach(k => { if(r[k] !== "") present.add(k); }));
+  const preferred = pref.filter(k => present.has(k));
+  const rest = [...present].filter(k => !preferred.includes(k));
+  return preferred.length ? preferred.concat(rest) : [...present];
+}
+
+function buildTable(columns, rows) {
+  const table = document.createElement('table');
+  const thead = document.createElement('thead');
+  const thr = document.createElement('tr');
+  columns.forEach(col => {
+    const th = document.createElement('th');
+    th.textContent = col;
+    thr.appendChild(th);
+  });
+  thead.appendChild(thr);
+  table.appendChild(thead);
+  const tbody = document.createElement('tbody');
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    columns.forEach(c => {
+      const td = document.createElement('td');
+      td.textContent = r[c] ?? "";
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  return table;
+}
+
+function render(pref, q="") {
+  const root = document.getElementById('root');
+  root.innerHTML = "";
+  const query = q.trim();
+  const catSel = document.getElementById('cat');
+  const pick = catSel.value;
+  const cats = (pick && pick !== 'すべて') ? CATS.filter(c => c.name === pick) : CATS;
+  cats.forEach(cat => {
+    const rows = cat.results || [];
+    if(query){
+      const hit = rows.some(r => Object.values(r).some(v => String(v).includes(query)));
+      if(!hit) return;
     }
+    const columns = orderColumns(rows, pref);
+    const box = document.createElement('section');
+    box.className = 'category';
+    const h2 = document.createElement('h2');
+    h2.innerHTML = `${cat.name} <span class="badge">${rows.length}名</span>`;
+    box.appendChild(h2);
+    const wrap = document.createElement('div');
+    wrap.className = 'table-wrap';
+    wrap.appendChild(buildTable(columns, rows));
+    box.appendChild(wrap);
+    root.appendChild(box);
+  });
+}
 
-    function buildTable(category) {
-        let tableHtml = '<table>';
-        
-        // Headers
-        if (category.results.length > 0) {
-            tableHtml += '<tr>';
-            for (let header in category.results[0]) {
-                tableHtml += `<th>${header}</th>`;
-            }
-            tableHtml += '</tr>';
-        }
+function populateCategorySelect() {
+  const catSel = document.getElementById('cat');
+  const current = catSel.value; // keep current selection if possible
+  catSel.innerHTML = "";
+  const names = ['すべて', ...CATS.map(c => c.name)];
+  names.forEach(n => {
+    const opt = document.createElement('option');
+    opt.value = n; opt.textContent = n;
+    catSel.appendChild(opt);
+  });
+  if (names.includes(current)) catSel.value = current;
+  else catSel.value = 'すべて';
+}
 
-        // Body
-        category.results.forEach(result => {
-            tableHtml += '<tr>';
-            for (let key in result) {
-                tableHtml += `<td>${result[key]}</td>`;
-            }
-            tableHtml += '</tr>';
-        });
+async function reloadSource() {
+  const sourceSel = document.getElementById('source');
+  const sourceNote = document.getElementById('source-note');
+  const search = document.getElementById('q');
+  const sKey = sourceSel.value;
+  const src = SOURCES[sKey];
+  CURRENT_SOURCE = sKey;
+  sourceNote.textContent = `表示データ: ${src.url}`;
+  CATS = await fetchCategories(src.url);
+  populateCategorySelect();
+  render(src.pref, search.value);
+}
 
-        tableHtml += '</table>';
-        return tableHtml;
-    }
+document.addEventListener('DOMContentLoaded', async () => {
+  const sourceSel = document.getElementById('source');
+  const catSel = document.getElementById('cat');
+  const search = document.getElementById('q');
 
-    fetch('data.json')
-      .then(response => response.json())
-      .then(data => {
-        const tabButtonsContainer = document.getElementById('tab-buttons');
-        const tabContentsContainer = document.getElementById('tab-contents');
+  Object.keys(SOURCES).forEach(name => {
+    const opt = document.createElement('option');
+    opt.value = name; opt.textContent = name;
+    sourceSel.appendChild(opt);
+  });
+  sourceSel.value = Object.keys(SOURCES)[0];
 
-        data.categories.forEach((category, index) => {
-          // Create tab button
-          const button = document.createElement('button');
-          button.className = 'tablinks';
-          button.textContent = category.name;
-          button.onclick = (event) => openCategory(event, category.id);
-          tabButtonsContainer.appendChild(button);
+  sourceSel.addEventListener('change', reloadSource);
+  catSel.addEventListener('change', () => {
+    const pref = SOURCES[CURRENT_SOURCE].pref;
+    render(pref, search.value);
+  });
+  search.addEventListener('input', () => {
+    const pref = SOURCES[CURRENT_SOURCE].pref;
+    render(pref, search.value);
+  });
 
-          // Create tab content
-          const contentDiv = document.createElement('div');
-          contentDiv.id = category.id;
-          contentDiv.className = 'tabcontent';
-          contentDiv.innerHTML = buildTable(category);
-          tabContentsContainer.appendChild(contentDiv);
-
-          // Open the first tab by default
-          if (index === 0) {
-            button.click();
-          }
-        });
-      });
-  </script>
-
-</body>
+  await reloadSource();
+});
+</script>
 </html>
