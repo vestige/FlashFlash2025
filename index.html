@@ -40,7 +40,7 @@ footer{color:var(--muted);font-size:12px;margin:40px 0 20px}
 </header>
 <main class="wrap">
   <div id="root"></div>
-  <footer>ローカルの <code>seisei.json</code> と GitHubの <code>data.json</code> を切り替えて表示します。</footer>
+  <footer></footer>
 </main>
 <script>
 const SOURCES = {
@@ -148,7 +148,7 @@ async function reloadSource() {
   const sKey = sourceSel.value;
   const src = SOURCES[sKey];
   CURRENT_SOURCE = sKey;
-  sourceNote.textContent = `表示データ: ${src.url}`;
+//  sourceNote.textContent = `表示データ: ${src.url}`;
   CATS = await fetchCategories(src.url);
   populateCategorySelect();
   render(src.pref, search.value);
